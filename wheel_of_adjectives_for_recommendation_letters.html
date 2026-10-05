@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Wheel of Adjectives</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- html2pdf.js for generating PDF output -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- Canvas Confetti for celebratory milestone animations -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Pulsing glow animation for Spin button */
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+      50% { box-shadow: 0 0 28px rgba(34, 197, 94, 0.8); }
+    }
+    .glow-active {
+      animation: pulseGlow 2s infinite;
+    }
+
+    /* Glassmorphism cards */
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Print/PDF specific overrides */
+    @media print {
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-slate-950 text-slate-100 antialiased selection:bg-brand-500 selection:text-slate-950">
+
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3 text-center md:text-left">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-slate-950 font-bold text-xl shadow-lg shadow-brand-500/20">
+          <i class="fa-solid fa-compass-drafting"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-slate-50 flex items-center gap-2">
+            Adjective Selector <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20 font-medium">Rec Letter Helper</span>
+          </h1>
+          <p class="text-xs text-slate-400">Spin the wheel up to 6 times to lock in 3 core strengths for your teacher recommendation.</p>
+        </div>
+      </div>
+
+      <!-- Spin & Lock Counters -->
+      <div class="flex items-center gap-6 bg-slate-900 px-4 py-2 rounded-2xl border border-slate-800">
+        <!-- Spins Counter -->
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Spins:</span>
+          <div id="spins-pip-container" class="flex gap-1.5">
+            <!-- Dynamic 6 Pips -->
+          </div>
+        </div>
+
+        <div class="h-6 w-px bg-slate-800"></div>
+
+        <!-- Locked Counter -->
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Locked:</span>
+          <div class="flex items-center gap-1 font-bold text-sm text-brand-400">
+            <i class="fa-solid fa-lock text-xs"></i>
+            <span id="locked-count-text">0/3</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    
+    <!-- LEFT PANEL: Canvas Wheel & Control Dashboard (7 Columns) -->
+    <section class="lg:col-span-7 flex flex-col items-center justify-center glass-card rounded-3xl p-6 sm:p-8 relative overflow-hidden">
+      <!-- Background Decorative Gradients -->
+      <div class="absolute -top-24 -left-24 w-72 h-72 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- Wheel Container -->
+      <div class="relative w-full max-w-[420px] aspect-square my-2 flex items-center justify-center">
+        <!-- Top Pointer / Indicator -->
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-3 z-20 filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.5)]">
+          <div class="w-8 h-10 bg-slate-100 clip-pointer flex items-start justify-center pt-1" style="clip-path: polygon(100% 0, 0 0, 50% 100%);">
+            <div class="w-3 h-3 rounded-full bg-slate-950"></div>
+          </div>
+        </div>
+
+        <!-- Canvas Element -->
+        <canvas id="wheel-canvas" class="w-full h-full rounded-full shadow-2xl border-4 border-slate-800/80 transition-transform"></canvas>
+
+        <!-- Center Hub -->
+        <div class="absolute w-16 h-16 sm:w-20 sm:h-20 bg-slate-900 border-4 border-slate-700 rounded-full flex flex-col items-center justify-center shadow-inner z-10">
+          <i class="fa-solid fa-graduation-cap text-slate-300 text-lg sm:text-xl"></i>
+          <span class="text-[10px] font-semibold text-slate-400 mt-0.5">SPIN</span>
+        </div>
+      </div>
+
+      <!-- Actions Bar -->
+      <div class="w-full max-w-sm mt-6 flex flex-col gap-3">
+        <button id="spin-btn" onclick="spinWheel()" class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-brand-500 to-emerald-500 hover:from-brand-600 hover:to-emerald-600 text-slate-950 font-extrabold text-lg flex items-center justify-center gap-3 transition-all duration-200 active:scale-95 shadow-lg shadow-brand-500/25 glow-active">
+          <i class="fa-solid fa-rotate text-xl"></i>
+          <span>SPIN THE WHEEL</span>
+        </button>
+
+        <div class="flex items-center justify-between text-xs text-slate-400 px-2">
+          <span><i class="fa-solid fa-circle-info mr-1 text-slate-500"></i> Click spin to select random adjective</span>
+          <button onclick="resetGame()" class="text-slate-500 hover:text-slate-300 underline transition-colors">Reset Session</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Locked Selection Cards & Action Drawer (5 Columns) -->
+    <section class="lg:col-span-5 flex flex-col gap-6">
+      
+      <!-- Panel Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-bookmark text-brand-400"></i> Your Selected Attributes
+          </h2>
+          <p class="text-xs text-slate-400">Lock in 3 adjectives to generate your rec letter toolkit.</p>
+        </div>
+
+        <button id="export-pdf-btn" disabled onclick="generatePDF()" class="opacity-50 cursor-not-allowed px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-2 transition-all">
+          <i class="fa-solid fa-file-pdf text-red-400 text-sm"></i>
+          <span>Save as PDF</span>
+        </button>
+      </div>
+
+      <!-- Locked Items Container -->
+      <div id="locked-slots-container" class="flex flex-col gap-4">
+        <!-- Dynamic Slots injected by JS -->
+      </div>
+
+      <!-- Student Name Input Block (for PDF customizing) -->
+      <div class="glass-card rounded-2xl p-4 border border-slate-800 flex flex-col gap-2">
+        <label for="student-name-input" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+          <i class="fa-regular fa-id-card text-brand-400"></i> Student Name for Recommendation Reference Sheet:
+        </label>
+        <input type="text" id="student-name-input" placeholder="e.g. Alex Morgan" class="w-full px-3 py-2 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors">
+      </div>
+
+    </section>
+  </main>
+
+  <!-- MODAL: Spun Adjective Card -->
+  <div id="result-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-300">
+    <div class="glass-card max-w-lg w-full rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl relative transform scale-95 transition-transform duration-300" id="modal-card">
+      
+      <!-- Category Badge -->
+      <div class="flex items-center justify-between mb-4">
+        <span id="modal-category-badge" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-brand-500/10 text-brand-400 border border-brand-500/20">
+          Academic Aptitude
+        </span>
+        <span class="text-xs text-slate-400 font-medium" id="modal-spin-notice">Spin Result</span>
+      </div>
+
+      <!-- Adjective Title -->
+      <h3 id="modal-word-title" class="text-3xl sm:text-4xl font-extrabold text-slate-50 tracking-tight mb-3">
+        Analytical
+      </h3>
+
+      <!-- Definition Box -->
+      <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 mb-5">
+        <p class="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-1">Definition</p>
+        <p id="modal-word-def" class="text-sm text-slate-200 leading-relaxed">
+          Skilled at breaking down complex concepts, evaluating data, and drawing logical conclusions.
+        </p>
+      </div>
+
+      <!-- Recommendation Letter Tip Box -->
+      <div class="bg-brand-950/20 rounded-2xl p-4 border border-brand-500/20 mb-6">
+        <p class="text-xs text-brand-400 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1.5">
+          <i class="fa-solid fa-lightbulb"></i> Letter Highlight Tip
+        </p>
+        <p id="modal-word-tip" class="text-sm text-slate-300 leading-relaxed">
+          Ask your recommender to mention specific research papers, lab write-ups, or problem-solving approaches you demonstrated.
+        </p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="grid grid-cols-2 gap-3">
+        <button id="modal-skip-btn" onclick="skipSpunWord()" class="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm transition-all border border-slate-700 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Skip & Pass
+        </button>
+        <button id="modal-lock-btn" onclick="lockSpunWord()" class="py-3 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-lock"></i> Lock This In
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- HIDDEN PRINT TEMPLATE FOR PDF GENERATION -->
+  <div class="hidden">
+    <div id="pdf-template" class="p-8 bg-white text-slate-900 font-sans max-w-2xl">
+      <div class="border-b-2 border-slate-900 pb-4 mb-6 flex justify-between items-end">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 uppercase tracking-wide">Student Recommendation Brief</h1>
+          <p class="text-sm text-slate-600">Core Attributes & Recommendation Highlights</p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs text-slate-500 uppercase">Student Name</p>
+          <p id="pdf-student-name" class="text-base font-bold text-slate-900">Alex Morgan</p>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-600 mb-6 italic leading-relaxed">
+        Dear Recommender, to assist you in drafting a comprehensive letter of recommendation, I have identified three core personal qualities that best characterize my academic performance, work ethic, and character:
+      </p>
+
+      <div id="pdf-words-list" class="space-y-6">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500">
+        <span>Generated via Adjective Selector Tool</span>
+        <span id="pdf-date">Date: Oct 2026</span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500">
+    <p>Empowering students to request compelling recommendation letters.</p>
+  </footer>
+
+  <script>
+    // Database of 25 Adjectives categorized with definitions & tailored letter tips
+    const ALL_ADJECTIVES = [
+      { id: 1, word: "Analytical", category: "Academic & Intellectual", color: "#3b82f6", def: "Skilled at breaking down complex concepts, evaluating data, and drawing logical conclusions.", tip: "Ask recommender to highlight lab reports, quantitative projects, or structured essays." },
+      { id: 2, word: "Inquisitive", category: "Academic & Intellectual", color: "#06b6d4", def: "Driven by a genuine desire to learn, asking thoughtful questions beyond basic course material.", tip: "Highlight your engagement during office hours, class discussions, or outside reading." },
+      { id: 3, word: "Resourceful", category: "Academic & Intellectual", color: "#0ea5e9", def: "Adept at finding creative solutions, leveraging available tools, and overcoming hurdles independently.", tip: "Mention a project where you solved a technical glitch or found primary sources." },
+      { id: 4, word: "Insightful", category: "Academic & Intellectual", color: "#2563eb", def: "Able to offer deep understanding and unique, valuable perspectives during discussions.", tip: "Point to specific class debates or analytical assignments where your ideas stood out." },
+      { id: 5, word: "Articulate", category: "Academic & Intellectual", color: "#1d4ed8", def: "Expresses ideas clearly, persuasively, and effectively in written and verbal presentations.", tip: "Reference speeches, oral defenses, or published student writing." },
+      { id: 6, word: "Detail-Oriented", category: "Academic & Intellectual", color: "#0284c7", def: "Consistently produces thorough, precise, and polished work with high attention to accuracy.", tip: "Ask teacher to emphasize error-free work, neat labs, or precise calculations." },
+      { id: 7, word: "Conscientious", category: "Work Ethic & Dependability", color: "#10b981", def: "Takes personal responsibility for quality, meets deadlines consistently, and maintains high standards.", tip: "Focus on your consistency across an entire semester or academic year." },
+      { id: 8, word: "Proactive", category: "Work Ethic & Dependability", color: "#059669", def: "Takes initiative on assignments and projects without needing constant direction.", tip: "Highlight times you started major projects early or suggested class improvements." },
+      { id: 9, word: "Tenacious", category: "Work Ethic & Dependability", color: "#047857", def: "Demonstrates persistence and resilience when tackling difficult concepts or setbacks.", tip: "Share an instance where you revised a paper multiple times or worked through tough material." },
+      { id: 10, word: "Disciplined", category: "Work Ethic & Dependability", color: "#15803d", def: "Manages time effectively, balances commitments, and maintains steady focus.", tip: "Mention how you balanced intense coursework with athletics, job, or extracurriculars." },
+      { id: 11, word: "Methodical", category: "Work Ethic & Dependability", color: "#166534", def: "Approaches complex projects with a clear, organized, and systematic step-by-step strategy.", tip: "Point out structured research outlines, organized notes, or code documentation." },
+      { id: 12, word: "Dependable", category: "Work Ethic & Dependability", color: "#14532d", def: "Unwaveringly reliable in fulfilling promises, group commitments, and showing up prepared.", tip: "Have your recommender confirm your perfect attendance or punctuality in group work." },
+      { id: 13, word: "Collaborative", category: "Leadership & Collaboration", color: "#8b5cf6", def: "Works seamlessly in team environments, actively listening to others and integrating diverse views.", tip: "Ask your teacher to comment on how you elevate group dynamic during team projects." },
+      { id: 14, word: "Diplomatic", category: "Leadership & Collaboration", color: "#7c3aed", def: "Navigates group dynamics, differing opinions, or conflicts with tact, respect, and fairness.", tip: "Highlight mediating team disagreements or facilitating inclusive discussions." },
+      { id: 15, word: "Adaptable", category: "Leadership & Collaboration", color: "#6d28d9", def: "Adjusts quickly to changing expectations, shifting project goals, or unfamiliar environments.", tip: "Mention pivoting smoothly when assignment guidelines or team roles changed." },
+      { id: 16, word: "Initiative-Driven", category: "Leadership & Collaboration", color: "#5b21b6", def: "Steps up naturally to lead group efforts, organize resources, or propose constructive solutions.", tip: "Share how you organized review sessions or led a group project team." },
+      { id: 17, word: "Supportive", category: "Leadership & Collaboration", color: "#4c1d95", def: "Encourages classmates, shares knowledge generously, and helps elevate group output.", tip: "Mention tutoring peers informally or helping classmates catch up after absences." },
+      { id: 18, word: "Empathetic", category: "Leadership & Collaboration", color: "#a855f7", def: "Demonstrates emotional intelligence and genuine care for the well-being and success of peers.", tip: "Highlight community service, peer mentoring, or empathetic perspective-taking." },
+      { id: 19, word: "Receptive", category: "Personal Character & Growth", color: "#f59e0b", def: "Welcomes constructive feedback and actively uses suggestions to grow and improve.", tip: "Showcase how you incorporated draft critiques to elevate a final portfolio." },
+      { id: 20, word: "Self-Motivated", category: "Personal Character & Growth", color: "#d97706", def: "Driven by internal goals, curiosity, and a personal commitment to excellence.", tip: "Highlight independent research, summer reading, or self-directed learning." },
+      { id: 21, word: "Versatile", category: "Personal Character & Growth", color: "#b45309", def: "Easily shifts between different subjects, roles, or project types with competence.", tip: "Mention excelling across diverse assignment types (e.g., presentations, papers, labs)." },
+      { id: 22, word: "Enthusiastic", category: "Personal Character & Growth", color: "#ef4444", def: "Brings genuine energy, passion, and positive engagement to class activities.", tip: "Ask teacher to comment on your positive energy that lifts the classroom atmosphere." },
+      { id: 23, word: "Civic-Minded", category: "Personal Character & Growth", color: "#dc2626", def: "Dedicated to contributing positively to the school, local community, or broader culture.", tip: "Focus on school involvement, volunteering, or community-based projects." },
+      { id: 24, word: "Forward-Thinking", category: "Personal Character & Growth", color: "#b91c1c", def: "Anticipates future steps, plans strategically, and considers long-term outcomes.", tip: "Highlight long-term planning for capstone projects or club leadership initiatives." },
+      { id: 25, word: "Authentic", category: "Personal Character & Growth", color: "#991b1b", def: "Operates with strong personal integrity, honesty, and grounded self-awareness.", tip: "Emphasize personal academic honesty, genuine reflection, and moral character." }
+    ];
+
+    // State Variables
+    let remainingSpins = 6;
+    let lockedWords = []; // Max 3 items
+    let currentSpunItem = null;
+    let isSpinning = false;
+    let currentAngle = 0; // Radians
+
+    // DOM Elements
+    const canvas = document.getElementById('wheel-canvas');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spin-btn');
+    const resultModal = document.getElementById('result-modal');
+    const modalCard = document.getElementById('modal-card');
+
+    // Web Audio API tick generator
+    let audioCtx = null;
+    function playTickSound() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.03);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.03);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.035);
+      } catch (e) {
+        // Audio fallback
+      }
+    }
+
+    // Initialize High-DPI Canvas
+    function setupCanvas() {
+      const container = canvas.parentElement;
+      const size = Math.min(container.clientWidth, 420);
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+      ctx.scale(dpr, dpr);
+      drawWheel();
+    }
+
+    // Render Wheel Canvas
+    function drawWheel() {
+      const size = canvas.width / (window.devicePixelRatio || 1);
+      const center = size / 2;
+      const radius = center - 8;
+      const numSegments = ALL_ADJECTIVES.length;
+      const sliceAngle = (2 * Math.PI) / numSegments;
+
+      ctx.clearRect(0, 0, size, size);
+
+      ALL_ADJECTIVES.forEach((item, index) => {
+        const startAngle = currentAngle + index * sliceAngle;
+        const endAngle = startAngle + sliceAngle;
+
+        // Draw Sector Slice
+        ctx.beginPath();
+        ctx.moveTo(center, center);
+        ctx.arc(center, center, radius, startAngle, endAngle);
+        ctx.closePath();
+
+        // Alternating fill colors with high aesthetic balance
+        ctx.fillStyle = item.color;
+        ctx.fill();
+
+        // Stroke border
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Draw Text Label
+        ctx.save();
+        ctx.translate(center, center);
+        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '600 10px "Plus Jakarta Sans", sans-serif';
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 4;
+        
+        // Truncate text if needed
+        let label = item.word;
+        ctx.fillText(label, radius - 14, 3.5);
+        ctx.restore();
+      });
+
+      // Outer Ring Accent
+      ctx.beginPath();
+      ctx.arc(center, center, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    function spinWheel() {
+      if (isSpinning) return;
+      if (remainingSpins <= 0) {
+        alert("You have used all 6 available spins! Review your choices or click Reset Session.");
+        return;
+      }
+      if (lockedWords.length >= 3) {
+        alert("You have already locked in 3 adjectives! You can generate your PDF worksheet now.");
+        return;
+      }
+
+      isSpinning = true;
+      spinBtn.disabled = true;
+      spinBtn.classList.remove('glow-active');
+      spinBtn.classList.add('opacity-60', 'cursor-not-allowed');
+
+      // Random target spin calculation
+      const numSegments = ALL_ADJECTIVES.length;
+      const sliceAngle = (2 * Math.PI) / numSegments;
+      
+      // Calculate random spins (between 4 and 7 full rotations) plus random target segment
+      const fullRotations = (4 + Math.random() * 3) * (2 * Math.PI);
+      const randomSegmentIndex = Math.floor(Math.random() * numSegments);
+      
+      // Top pointer is at -90deg (or 3*PI/2)
+      const targetAngleOffset = (3 * Math.PI / 2) - (randomSegmentIndex * sliceAngle + sliceAngle / 2);
+      const totalRotationDelta = fullRotations + (targetAngleOffset - (currentAngle % (2 * Math.PI)));
+
+      const duration = 4500; // ms
+      const startTime = performance.now();
+      const initialAngle = currentAngle;
+
+      let lastTickSegment = -1;
+
+      function animateSpin(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Ease-out cubic deceleration curve
+        const easeOut = 1 - Math.pow(1 - progress, 3.5);
+
+        currentAngle = initialAngle + totalRotationDelta * easeOut;
+        drawWheel();
+
+        // Sound tick calculation
+        const normalizedAngle = (currentAngle % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+        const currentSegmentAtPointer = Math.floor(
+          ((3 * Math.PI / 2 - normalizedAngle + 2 * Math.PI) % (2 * Math.PI)) / sliceAngle
+        );
+
+        if (currentSegmentAtPointer !== lastTickSegment) {
+          playTickSound();
+          lastTickSegment = currentSegmentAtPointer;
+        }
+
+        if (progress < 1) {
+          requestAnimationFrame(animateSpin);
+        } else {
+          // Animation Complete
+          isSpinning = false;
+          spinBtn.disabled = false;
+          spinBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+          spinBtn.classList.add('glow-active');
+
+          // Decrement spin count upon wheel completion
+          remainingSpins--;
+          updateSpinsPips();
+
+          // Determine selected item
+          const finalNormalizedAngle = (currentAngle % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+          const winningIndex = Math.floor(
+            ((3 * Math.PI / 2 - finalNormalizedAngle + 2 * Math.PI) % (2 * Math.PI)) / sliceAngle
+          );
+
+          currentSpunItem = ALL_ADJECTIVES[winningIndex];
+          showResultModal(currentSpunItem);
+        }
+      }
+
+      requestAnimationFrame(animateSpin);
+    }
+
+    function updateSpinsPips() {
+      const container = document.getElementById('spins-pip-container');
+      container.innerHTML = '';
+      for (let i = 0; i < 6; i++) {
+        const pip = document.createElement('div');
+        if (i < (6 - remainingSpins)) {
+          // Used spin
+          pip.className = 'w-2.5 h-2.5 rounded-full bg-slate-700 border border-slate-600';
+        } else {
+          // Remaining available spin
+          pip.className = 'w-2.5 h-2.5 rounded-full bg-brand-500 shadow-sm shadow-brand-500/50';
+        }
+        container.appendChild(pip);
+      }
+    }
+
+    function showResultModal(item) {
+      document.getElementById('modal-category-badge').innerText = item.category;
+      document.getElementById('modal-word-title').innerText = item.word;
+      document.getElementById('modal-word-def').innerText = item.def;
+      document.getElementById('modal-word-tip').innerText = item.tip;
+      document.getElementById('modal-spin-notice').innerText = `Spin ${6 - remainingSpins} of 6`;
+
+      // Enable/Disable Lock button based on whether item is already locked
+      const isAlreadyLocked = lockedWords.some(w => w.id === item.id);
+      const modalLockBtn = document.getElementById('modal-lock-btn');
+
+      if (isAlreadyLocked) {
+        modalLockBtn.disabled = true;
+        modalLockBtn.innerHTML = '<i class="fa-solid fa-check"></i> Already Locked';
+        modalLockBtn.className = 'py-3 px-4 rounded-xl bg-slate-700 text-slate-400 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2';
+      } else if (lockedWords.length >= 3) {
+        modalLockBtn.disabled = true;
+        modalLockBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Max 3 Locked';
+        modalLockBtn.className = 'py-3 px-4 rounded-xl bg-slate-700 text-slate-400 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2';
+      } else {
+        modalLockBtn.disabled = false;
+        modalLockBtn.innerHTML = '<i class="fa-solid fa-lock"></i> Lock This In';
+        modalLockBtn.className = 'py-3 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2';
+      }
+
+      resultModal.classList.remove('hidden');
+      setTimeout(() => {
+        resultModal.classList.remove('opacity-0');
+        modalCard.classList.remove('scale-95');
+        modalCard.classList.add('scale-100');
+      }, 10);
+    }
+
+    function closeModal() {
+      resultModal.classList.add('opacity-0');
+      modalCard.classList.remove('scale-100');
+      modalCard.classList.add('scale-95');
+      setTimeout(() => {
+        resultModal.classList.add('hidden');
+      }, 300);
+    }
+
+    function skipSpunWord() {
+      closeModal();
+    }
+
+    function lockSpunWord() {
+      if (!currentSpunItem) return;
+      if (lockedWords.length < 3 && !lockedWords.some(w => w.id === currentSpunItem.id)) {
+        lockedWords.push(currentSpunItem);
+        renderLockedSlots();
+        closeModal();
+
+        // Trigger confetti celebration if 3 words are locked
+        if (lockedWords.length === 3) {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        }
+      }
+    }
+
+    function renderLockedSlots() {
+      const container = document.getElementById('locked-slots-container');
+      document.getElementById('locked-count-text').innerText = `${lockedWords.length}/3`;
+      container.innerHTML = '';
+
+      // Render 3 slot cards (filled or empty)
+      for (let i = 0; i < 3; i++) {
+        const item = lockedWords[i];
+        const card = document.createElement('div');
+
+        if (item) {
+          // Filled Slot
+          card.className = 'glass-card rounded-2xl p-4 border border-brand-500/30 flex items-start justify-between gap-3 shadow-lg transition-all transform hover:-translate-y-0.5';
+          card.innerHTML = `
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                  ${item.category}
+                </span>
+              </div>
+              <h4 class="text-lg font-bold text-slate-100">${item.word}</h4>
+              <p class="text-xs text-slate-300 mt-1 line-clamp-2">${item.def}</p>
+            </div>
+            <button onclick="unlockWord(${i})" class="text-slate-500 hover:text-red-400 transition-colors p-1" title="Unlock slot">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          `;
+        } else {
+          // Empty Slot Placeholder
+          card.className = 'border-2 border-dashed border-slate-800 rounded-2xl p-5 flex items-center justify-center text-center text-slate-600';
+          card.innerHTML = `
+            <div class="flex items-center gap-2 text-xs font-semibold">
+              <i class="fa-solid fa-lock-open text-slate-700"></i>
+              <span>Slot ${i + 1} Empty (Spin to fill)</span>
+            </div>
+          `;
+        }
+
+        container.appendChild(card);
+      }
+
+      // Update Export PDF Button status
+      const exportBtn = document.getElementById('export-pdf-btn');
+      if (lockedWords.length === 3) {
+        exportBtn.disabled = false;
+        exportBtn.className = 'px-4 py-2 bg-gradient-to-r from-brand-500 to-emerald-500 hover:from-brand-600 hover:to-emerald-600 text-slate-950 text-xs font-bold rounded-xl shadow-lg shadow-brand-500/20 flex items-center gap-2 transition-all cursor-pointer';
+      } else {
+        exportBtn.disabled = true;
+        exportBtn.className = 'opacity-50 cursor-not-allowed px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-2 transition-all';
+      }
+    }
+
+    function unlockWord(index) {
+      lockedWords.splice(index, 1);
+      renderLockedSlots();
+    }
+
+    function resetGame() {
+      if (confirm("Reset all spins and locked adjectives?")) {
+        remainingSpins = 6;
+        lockedWords = [];
+        currentAngle = 0;
+        updateSpinsPips();
+        renderLockedSlots();
+        drawWheel();
+      }
+    }
+
+    function generatePDF() {
+      if (lockedWords.length === 0) {
+        alert("Please lock in at least one adjective before exporting your PDF reference sheet.");
+        return;
+      }
+
+      const nameInput = document.getElementById('student-name-input').value.trim();
+      const studentName = nameInput.length > 0 ? nameInput : "Student";
+
+      // Populate hidden PDF template
+      document.getElementById('pdf-student-name').innerText = studentName;
+      
+      // Set current date
+      const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      document.getElementById('pdf-date').innerText = `Date: ${dateStr}`;
+
+      const listContainer = document.getElementById('pdf-words-list');
+      listContainer.innerHTML = '';
+
+      lockedWords.forEach((item, idx) => {
+        const itemBlock = document.createElement('div');
+        itemBlock.className = 'p-4 rounded-lg bg-slate-50 border border-slate-200';
+        itemBlock.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-base font-bold text-slate-900">${idx + 1}. ${item.word}</span>
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">${item.category}</span>
+          </div>
+          <p class="text-xs text-slate-700 mb-2"><strong>Definition:</strong> ${item.def}</p>
+          <p class="text-xs text-slate-800 bg-emerald-50/80 p-2 rounded border border-emerald-200">
+            <strong>Recommender Highlight Tip:</strong> ${item.tip}
+          </p>
+        `;
+        listContainer.appendChild(itemBlock);
+      });
+
+      // Target element for html2pdf
+      const element = document.getElementById('pdf-template');
+      
+      const opt = {
+        margin:       0.5,
+        filename:     `${studentName.replace(/\s+/g, '_')}_Rec_Letter_Adjectives.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+
+      // Generate PDF
+      html2pdf().set(opt).from(element).save();
+    }
+
+    window.onload = function() {
+      setupCanvas();
+      updateSpinsPips();
+      renderLockedSlots();
+
+      window.addEventListener('resize', () => {
+        setupCanvas();
+      });
+    };
+  </script>
+</body>
+</html>
