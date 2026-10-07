@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMHS Bell Schedule</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen w-screen overflow-hidden flex flex-col items-center justify-between p-6">
+
+    <div class="mt-12 text-center w-full">
+        <h2 class="text-xl sm:text-2xl text-slate-500 font-semibold tracking-widest uppercase mb-2">Today Is...</h2>
+        <!-- Medium weight font for the date as requested -->
+        <h1 id="date-display" class="text-3xl sm:text-4xl font-medium text-slate-900">Loading date...</h1>
+    </div>
+
+    <div class="flex-grow flex items-center justify-center w-full px-4">
+        <div id="block-display" class="text-6xl sm:text-8xl md:text-9xl font-black text-center tracking-tight drop-shadow-sm transition-colors duration-500">
+            <!-- JS will inject current block name here -->
+        </div>
+    </div>
+
+    <div id="up-next-container" class="mb-12 pt-8 border-t-2 border-slate-200 w-full max-w-lg text-center hidden transition-opacity duration-300">
+        <p class="text-xs sm:text-sm text-slate-400 uppercase tracking-widest font-bold mb-3">Up Next</p>
+        <div class="flex flex-col sm:flex-row justify-center items-center sm:items-baseline space-y-1 sm:space-y-0 sm:space-x-3">
+            <span id="next-block-name" class="text-2xl sm:text-3xl font-bold text-slate-800"></span>
+            <span class="text-slate-400 font-medium">in</span>
+            <span id="countdown" class="text-2xl sm:text-3xl font-mono font-semibold text-slate-600 bg-slate-200/50 px-3 py-1 rounded-md"></span>
+        </div>
+    </div>
+
+    <div class="fixed bottom-3 right-3 z-50">
+        <select id="color-override" class="text-xs bg-slate-100 border border-slate-300 rounded-md px-2 py-1 text-slate-500 hover:text-slate-700 cursor-pointer outline-none shadow-sm transition-colors">
+            <option value="auto">Auto-detect Day</option>
+            <option value="blue">Force Blue Day</option>
+            <option value="gold">Force Gold Day</option>
+            <option value="green">Force Green Day</option>
+        </select>
+    </div>
+
+    <script>
+        // Schedule Definitions based on "Daily Bell Schedules 26-27"
+        const schedules = {
+            normal: [
+                { name: "Block 1", start: "07:20", end: "08:50" },
+                { name: "Block 2", start: "08:55", end: "10:25" },
+                { name: "Advisory", start: "10:30", end: "11:00" },
+                { name: "Block 3", start: "11:05", end: "13:05" },
+                { name: "Block 4", start: "13:10", end: "14:40" }
+            ],
+            greenWed: [
+                { name: "Green 1B", start: "07:20", end: "08:03" },
+                { name: "Green 1G", start: "08:08", end: "08:51" },
+                { name: "Green 2B", start: "08:56", end: "09:39" },
+                { name: "Green 2G", start: "09:44", end: "10:27" },
+                { name: "Green 3B", start: "10:32", end: "11:15" },
+                { name: "Green 3G", start: "11:20", end: "12:33" }, // Includes Lunch rotation
+                { name: "Green 4B", start: "12:38", end: "13:21" },
+                { name: "Green 4G", start: "13:26", end: "14:10" }
+            ],
+            blueGoldWed: [
+                { name: "Block 1", start: "07:20", end: "08:50" },
+                { name: "Block 2", start: "08:55", end: "10:25" },
+                { name: "Block 3", start: "10:30", end: "12:35" }, // Includes Lunch rotation
+                { name: "Block 4", start: "12:40", end: "14:10" }
+            ]
+        };
+
+        // Provided GREEN Day Dates from prompt mapping
+        const greenWednesdays = [
+            "2026-09-02", "2026-09-09", "2026-09-30", "2026-11-04",
+            "2027-01-20", "2027-02-10", "2027-03-10", "2027-03-31"
+        ];
+
+        function timeToSeconds(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 3600 + minutes * 60;
+        }
+
+        function formatCountdown(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            
+            if (h > 0) return `${h}h ${m}m ${s}s`;
+            return `${m}m ${s}s`;
+        }
+
+        function getScheduleAndColor(dateObj) {
+            // Local date string format YYYY-MM-DD
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const isoDate = `${year}-${month}-${day}`;
+
+            const dayOfWeek = dateObj.getDay();
+            const overrideVal = document.getElementById('color-override').value;
+
+            let color = 'blue';
+            let blocks = schedules.normal;
+
+            // Handle manual override
+            if (overrideVal !== 'auto') {
+                color = overrideVal;
+                if (color === 'green') {
+                    blocks = schedules.greenWed;
+                } else if (dayOfWeek === 3) { // Wednesday override logic
+                    blocks = schedules.blueGoldWed;
+                } else {
+                    blocks = schedules.normal;
+                }
+                return { color, blocks };
+            }
+
+            // Auto-detect logic
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                return { type: 'weekend', color: 'slate', blocks: [] };
+            }
+
+            if (dayOfWeek === 3) { // Wednesdays
+                if (greenWednesdays.includes(isoDate)) {
+                    return { color: 'green', blocks: schedules.greenWed };
+                } else {
+                    // Alternating/Default to Blue for non-Green Wednesdays
+                    return { color: 'blue', blocks: schedules.blueGoldWed };
+                }
+            }
+
+            // Normal M/T/Th/F Logic - Simulating Blue/Gold alternation
+            color = (dayOfWeek === 1 || dayOfWeek === 4) ? 'blue' : 'gold';
+            return { color: color, blocks: schedules.normal };
+        }
+
+        function updateDisplay() {
+            const now = new Date();
+            const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+            // Set Date Text (Medium weight font is applied via Tailwind 'font-medium' on the element)
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('date-display').innerText = now.toLocaleDateString('en-US', dateOptions);
+
+            const { color, blocks } = getScheduleAndColor(now);
+
+            // Apply specific Tailwind color classes based on the day
+            const blockDisplay = document.getElementById('block-display');
+            blockDisplay.className = `text-6xl sm:text-8xl md:text-9xl font-black text-center tracking-tight transition-colors duration-500 drop-shadow-sm`;
+            
+            if (color === 'blue') blockDisplay.classList.add('text-blue-600');
+            else if (color === 'gold') blockDisplay.classList.add('text-amber-500'); // Amber fits "Gold" best
+            else if (color === 'green') blockDisplay.classList.add('text-green-600');
+            else blockDisplay.classList.add('text-slate-400');
+
+            let currentBlock = null;
+            let nextBlock = null;
+            let statusText = "";
+
+            if (blocks.length === 0) {
+                statusText = "Weekend";
+            } else {
+                for (let i = 0; i < blocks.length; i++) {
+                    const block = blocks[i];
+                    const startSecs = timeToSeconds(block.start);
+                    const endSecs = timeToSeconds(block.end);
+
+                    if (currentSeconds >= startSecs && currentSeconds < endSecs) {
+                        currentBlock = block;
+                        nextBlock = blocks[i+1] || null;
+                        break;
+                    } else if (currentSeconds < startSecs) {
+                        // We are in a gap BEFORE this block
+                        statusText = (i === 0) ? "Before School" : "Passing Period";
+                        nextBlock = block;
+                        break;
+                    }
+                }
+
+                if (!currentBlock && !nextBlock && currentSeconds >= timeToSeconds(blocks[blocks.length-1].end)) {
+                    statusText = "After School";
+                }
+            }
+
+            // Update main bulk text
+            blockDisplay.innerText = currentBlock ? currentBlock.name : statusText;
+
+            const upNextContainer = document.getElementById('up-next-container');
+            if (nextBlock) {
+                upNextContainer.classList.remove('hidden');
+                const startSecs = timeToSeconds(nextBlock.start);
+                const diff = startSecs - currentSeconds;
+                
+                document.getElementById('next-block-name').innerText = nextBlock.name;
+                document.getElementById('countdown').innerText = formatCountdown(diff);
+            } else {
+                upNextContainer.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('color-override').addEventListener('change', () => {
+            updateDisplay(); // Instantly update when user forces a color
+        });
+
+        // Run immediately, then check every second
+        updateDisplay();
+        setInterval(updateDisplay, 1000);
+
+    </script>
+</body>
+</html>
