@@ -16,24 +16,36 @@
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen w-screen overflow-hidden flex flex-col items-center justify-between p-6">
 
-    <div class="mt-12 text-center w-full">
-        <h2 class="text-xl sm:text-2xl text-slate-500 font-semibold tracking-widest uppercase mb-2">Today Is...</h2>
+    <div class="mt-8 sm:mt-12 text-center w-full max-w-lg">
+        <h2 class="text-xs sm:text-sm text-slate-400 font-semibold tracking-widest uppercase mb-1">Today Is...</h2>
         <!-- Medium weight font for the date as requested -->
-        <h1 id="date-display" class="text-3xl sm:text-4xl font-medium text-slate-900">Loading date...</h1>
-    </div>
-
-    <div class="flex-grow flex items-center justify-center w-full px-4">
-        <div id="block-display" class="text-6xl sm:text-8xl md:text-9xl font-black text-center tracking-tight drop-shadow-sm transition-colors duration-500">
-            <!-- JS will inject current block name here -->
+        <h1 id="date-display" class="text-2xl sm:text-4xl font-medium text-slate-900">Loading date...</h1>
+        <div id="day-badge" class="mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-slate-200 text-slate-700">
+            Checking Day...
         </div>
     </div>
 
-    <div id="up-next-container" class="mb-12 pt-8 border-t-2 border-slate-200 w-full max-w-lg text-center hidden transition-opacity duration-300">
-        <p class="text-xs sm:text-sm text-slate-400 uppercase tracking-widest font-bold mb-3">Up Next</p>
+    <div class="flex-grow flex flex-col items-center justify-center w-full max-w-xl px-4">
+        <div id="block-display" class="text-5xl sm:text-7xl md:text-8xl font-black text-center tracking-tight drop-shadow-sm transition-colors duration-500">
+            <!-- JS will inject current block or passing period name here -->
+        </div>
+        
+        <div id="period-time-range" class="mt-3 text-sm sm:text-lg font-semibold text-slate-500 bg-slate-200/60 px-4 py-1.5 rounded-full hidden">
+            <!-- E.g. 7:20 AM – 8:50 AM -->
+        </div>
+
+        <!-- Period Progress Bar -->
+        <div id="progress-container" class="w-full max-w-md bg-slate-200 h-2 rounded-full mt-6 overflow-hidden hidden">
+            <div id="progress-bar" class="bg-slate-600 h-full transition-all duration-500 rounded-full" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div id="up-next-container" class="mb-8 sm:mb-12 pt-6 border-t border-slate-200 w-full max-w-lg text-center hidden transition-opacity duration-300">
+        <p id="up-next-label" class="text-xs sm:text-sm text-slate-400 uppercase tracking-widest font-bold mb-2">Up Next</p>
         <div class="flex flex-col sm:flex-row justify-center items-center sm:items-baseline space-y-1 sm:space-y-0 sm:space-x-3">
-            <span id="next-block-name" class="text-2xl sm:text-3xl font-bold text-slate-800"></span>
-            <span class="text-slate-400 font-medium">in</span>
-            <span id="countdown" class="text-2xl sm:text-3xl font-mono font-semibold text-slate-600 bg-slate-200/50 px-3 py-1 rounded-md"></span>
+            <span id="next-block-name" class="text-xl sm:text-2xl font-bold text-slate-800"></span>
+            <span id="in-label" class="text-slate-400 font-medium text-sm">in</span>
+            <span id="countdown" class="text-2xl sm:text-3xl font-mono font-bold text-slate-700 bg-slate-200/70 px-3 py-1 rounded-lg"></span>
         </div>
     </div>
 
@@ -74,7 +86,7 @@
             ]
         };
 
-        // Provided GREEN Day Dates from prompt mapping
+        // Provided GREEN Day Dates from calendar mapping
         const greenWednesdays = [
             "2026-09-02", "2026-09-09", "2026-09-30", "2026-11-04",
             "2027-01-20", "2027-02-10", "2027-03-10", "2027-03-31"
@@ -85,17 +97,26 @@
             return hours * 3600 + minutes * 60;
         }
 
+        function format12Hour(timeStr) {
+            const [h24, m] = timeStr.split(':').map(Number);
+            const period = h24 >= 12 ? 'PM' : 'AM';
+            const h12 = h24 % 12 || 12;
+            const minFormatted = String(m).padStart(2, '0');
+            return `${h12}:${minFormatted} ${period}`;
+        }
+
         function formatCountdown(seconds) {
+            if (seconds <= 0) return "0m 00s";
             const h = Math.floor(seconds / 3600);
             const m = Math.floor((seconds % 3600) / 60);
             const s = seconds % 60;
+            const sFormatted = String(s).padStart(2, '0');
             
-            if (h > 0) return `${h}h ${m}m ${s}s`;
-            return `${m}m ${s}s`;
+            if (h > 0) return `${h}h ${m}m ${sFormatted}s`;
+            return `${m}m ${sFormatted}s`;
         }
 
         function getScheduleAndColor(dateObj) {
-            // Local date string format YYYY-MM-DD
             const year = dateObj.getFullYear();
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const day = String(dateObj.getDate()).padStart(2, '0');
@@ -129,7 +150,6 @@
                 if (greenWednesdays.includes(isoDate)) {
                     return { color: 'green', blocks: schedules.greenWed };
                 } else {
-                    // Alternating/Default to Blue for non-Green Wednesdays
                     return { color: 'blue', blocks: schedules.blueGoldWed };
                 }
             }
@@ -143,68 +163,174 @@
             const now = new Date();
             const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
-            // Set Date Text (Medium weight font is applied via Tailwind 'font-medium' on the element)
+            // Set Date Text
             const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             document.getElementById('date-display').innerText = now.toLocaleDateString('en-US', dateOptions);
 
             const { color, blocks } = getScheduleAndColor(now);
 
-            // Apply specific Tailwind color classes based on the day
-            const blockDisplay = document.getElementById('block-display');
-            blockDisplay.className = `text-6xl sm:text-8xl md:text-9xl font-black text-center tracking-tight transition-colors duration-500 drop-shadow-sm`;
-            
-            if (color === 'blue') blockDisplay.classList.add('text-blue-600');
-            else if (color === 'gold') blockDisplay.classList.add('text-amber-500'); // Amber fits "Gold" best
-            else if (color === 'green') blockDisplay.classList.add('text-green-600');
-            else blockDisplay.classList.add('text-slate-400');
+            // Update Day Badge
+            const dayBadge = document.getElementById('day-badge');
+            dayBadge.innerText = `${color.toUpperCase()} DAY`;
+            if (color === 'blue') dayBadge.className = 'mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-blue-100 text-blue-800';
+            else if (color === 'gold') dayBadge.className = 'mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-amber-100 text-amber-800';
+            else if (color === 'green') dayBadge.className = 'mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-green-100 text-green-800';
+            else dayBadge.className = 'mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-slate-200 text-slate-700';
 
-            let currentBlock = null;
-            let nextBlock = null;
-            let statusText = "";
+            const blockDisplay = document.getElementById('block-display');
+            const timeRangeEl = document.getElementById('period-time-range');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const upNextContainer = document.getElementById('up-next-container');
+            const upNextLabel = document.getElementById('up-next-label');
+            const nextBlockName = document.getElementById('next-block-name');
+            const countdownEl = document.getElementById('countdown');
+
+            // Default Text Styling
+            blockDisplay.className = `text-5xl sm:text-7xl md:text-8xl font-black text-center tracking-tight transition-colors duration-500 drop-shadow-sm`;
+
+            let activeStateName = "";
+            let periodStartTime = null;
+            let periodEndTime = null;
+            let nextStateName = "";
+            let isPassingPeriod = false;
 
             if (blocks.length === 0) {
-                statusText = "Weekend";
+                blockDisplay.innerText = "Weekend";
+                blockDisplay.classList.add('text-slate-400');
+                timeRangeEl.classList.add('hidden');
+                progressContainer.classList.add('hidden');
+                upNextContainer.classList.add('hidden');
+                return;
+            }
+
+            const dayStartSecs = timeToSeconds(blocks[0].start);
+            const dayEndSecs = timeToSeconds(blocks[blocks.length - 1].end);
+
+            if (currentSeconds < dayStartSecs) {
+                // Before School
+                activeStateName = "Before School";
+                periodStartTime = 0;
+                periodEndTime = dayStartSecs;
+                nextStateName = blocks[0].name;
+                blockDisplay.classList.add('text-slate-600');
+            } else if (currentSeconds >= dayEndSecs) {
+                // After School
+                activeStateName = "After School";
+                blockDisplay.innerText = activeStateName;
+                blockDisplay.classList.add('text-slate-500');
+                timeRangeEl.classList.add('hidden');
+                progressContainer.classList.add('hidden');
+                upNextContainer.classList.add('hidden');
+                return;
             } else {
+                // During School Hours - Evaluate blocks & passing periods
                 for (let i = 0; i < blocks.length; i++) {
-                    const block = blocks[i];
-                    const startSecs = timeToSeconds(block.start);
-                    const endSecs = timeToSeconds(block.end);
+                    const bStart = timeToSeconds(blocks[i].start);
+                    const bEnd = timeToSeconds(blocks[i].end);
 
-                    if (currentSeconds >= startSecs && currentSeconds < endSecs) {
-                        currentBlock = block;
-                        nextBlock = blocks[i+1] || null;
+                    if (currentSeconds >= bStart && currentSeconds < bEnd) {
+                        // Inside class period
+                        activeStateName = blocks[i].name;
+                        periodStartTime = bStart;
+                        periodEndTime = bEnd; // Countdown target is EXACT end of class period
+
+                        if (i < blocks.length - 1) {
+                            const nextStart = timeToSeconds(blocks[i + 1].start);
+                            if (nextStart > bEnd) {
+                                nextStateName = "Passing Period";
+                            } else {
+                                nextStateName = blocks[i + 1].name;
+                            }
+                        } else {
+                            nextStateName = "Dismissal";
+                        }
                         break;
-                    } else if (currentSeconds < startSecs) {
-                        // We are in a gap BEFORE this block
-                        statusText = (i === 0) ? "Before School" : "Passing Period";
-                        nextBlock = block;
-                        break;
+                    } else if (i < blocks.length - 1) {
+                        const bNextStart = timeToSeconds(blocks[i + 1].start);
+                        if (currentSeconds >= bEnd && currentSeconds < bNextStart) {
+                            // Inside PASSING PERIOD between blocks[i] and blocks[i+1]
+                            isPassingPeriod = true;
+                            activeStateName = "Passing Period";
+                            periodStartTime = bEnd;
+                            periodEndTime = bNextStart; // Countdown target is EXACT end of passing period
+                            nextStateName = blocks[i + 1].name;
+                            break;
+                        }
                     }
-                }
-
-                if (!currentBlock && !nextBlock && currentSeconds >= timeToSeconds(blocks[blocks.length-1].end)) {
-                    statusText = "After School";
                 }
             }
 
-            // Update main bulk text
-            blockDisplay.innerText = currentBlock ? currentBlock.name : statusText;
+            // Apply Block Colors
+            if (isPassingPeriod) {
+                blockDisplay.classList.add('text-amber-600');
+            } else if (color === 'blue') {
+                blockDisplay.classList.add('text-blue-600');
+            } else if (color === 'gold') {
+                blockDisplay.classList.add('text-amber-500');
+            } else if (color === 'green') {
+                blockDisplay.classList.add('text-green-600');
+            } else {
+                blockDisplay.classList.add('text-slate-700');
+            }
 
-            const upNextContainer = document.getElementById('up-next-container');
-            if (nextBlock) {
-                upNextContainer.classList.remove('hidden');
-                const startSecs = timeToSeconds(nextBlock.start);
-                const diff = startSecs - currentSeconds;
+            blockDisplay.innerText = activeStateName;
+
+            // Show current period time range
+            if (periodStartTime !== null && periodEndTime !== null) {
+                const startStr = format12Hour(
+                    activeStateName === "Before School" 
+                        ? "07:20" 
+                        : (isPassingPeriod ? blocks.find(b => timeToSeconds(b.end) === periodStartTime)?.end || "07:20" : blocks.find(b => timeToSeconds(b.start) === periodStartTime)?.start || "07:20")
+                );
+                const endStr = format12Hour(
+                    activeStateName === "Before School" 
+                        ? "07:20" 
+                        : (isPassingPeriod ? blocks.find(b => timeToSeconds(b.start) === periodEndTime)?.start || "07:20" : blocks.find(b => timeToSeconds(b.end) === periodEndTime)?.end || "07:20")
+                );
                 
-                document.getElementById('next-block-name').innerText = nextBlock.name;
-                document.getElementById('countdown').innerText = formatCountdown(diff);
+                timeRangeEl.innerText = `${startStr} – ${endStr}`;
+                timeRangeEl.classList.remove('hidden');
+
+                // Progress Bar calculation
+                const totalDuration = periodEndTime - periodStartTime;
+                const elapsed = Math.max(0, currentSeconds - periodStartTime);
+                const percentage = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+                
+                progressBar.style.width = `${percentage}%`;
+                if (color === 'blue') progressBar.className = 'bg-blue-600 h-full transition-all duration-500 rounded-full';
+                else if (color === 'gold' || isPassingPeriod) progressBar.className = 'bg-amber-500 h-full transition-all duration-500 rounded-full';
+                else if (color === 'green') progressBar.className = 'bg-green-600 h-full transition-all duration-500 rounded-full';
+                else progressBar.className = 'bg-slate-600 h-full transition-all duration-500 rounded-full';
+
+                progressContainer.classList.remove('hidden');
+            } else {
+                timeRangeEl.classList.add('hidden');
+                progressContainer.classList.add('hidden');
+            }
+
+            // Up Next & Countdown Update
+            if (nextStateName && periodEndTime !== null) {
+                upNextContainer.classList.remove('hidden');
+                const remainingSecs = periodEndTime - currentSeconds;
+
+                if (isPassingPeriod) {
+                    upNextLabel.innerText = "Class Starts In";
+                } else if (activeStateName === "Before School") {
+                    upNextLabel.innerText = "School Starts In";
+                } else {
+                    upNextLabel.innerText = "Up Next";
+                }
+
+                nextBlockName.innerText = nextStateName;
+                countdownEl.innerText = formatCountdown(remainingSecs);
             } else {
                 upNextContainer.classList.add('hidden');
             }
         }
 
         document.getElementById('color-override').addEventListener('change', () => {
-            updateDisplay(); // Instantly update when user forces a color
+            updateDisplay();
         });
 
         // Run immediately, then check every second
